@@ -8,7 +8,7 @@ try:
                                BitsAndBytesConfig, pipeline)
     from datasets import load_dataset
     from sentence_transformers import SentenceTransformer
-    import faiss, numpy as np, wikipediaapi
+    import faiss, numpy as np, wikipediaapi, wikipedia
     HAS_DEPS = True
 except ImportError as e:
     print(f"[ERROR] Missing dependency: {e}\n"
@@ -124,9 +124,13 @@ class WikiRAG:
         if query in self._cache:
             return self._cache[query]
         try:
-            page = self.wiki.page(query.split()[0].capitalize())
+            results = wikipedia.search(query, results=3)
+            if not results:
+                return ""
+            page = self.wiki.page(results[0])
             if not page.exists():
                 return ""
+            
             sentences = [s.strip() for s in
                          re.split(r'(?<=[.!?])\s+', page.text[:3000])
                          if len(s) > 40][:20]

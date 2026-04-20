@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Hallucination Study — Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f4f0;
+    color: #1a1917;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #fff;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 600; }
+  header p { font-size: 0.8rem; color: #6b6a65; margin-top: 2px; }
+  .status-badge {
+    font-size: 0.7rem; font-weight: 600; padding: 4px 12px;
+    border-radius: 20px; letter-spacing: 0.05em;
+  }
+  .status-ok  { background: #d1fae5; color: #065f46; }
+  .status-err { background: #fee2e2; color: #991b1b; }
+  .status-loading { background: #fef3c7; color: #92400e; }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+  .filters {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    align-items: center; margin-bottom: 1.5rem;
+    font-size: 12px; color: #6b6a65;
+  }
+  .fb {
+    padding: 5px 14px; font-size: 12px;
+    border: 1px solid rgba(0,0,0,0.15); border-radius: 8px;
+    cursor: pointer; background: transparent; color: #6b6a65;
+    transition: all 0.1s;
+  }
+  .fb:hover { background: rgba(0,0,0,0.04); }
+  .fb.on { background: #1a1917; color: #fff; border-color: #1a1917; font-weight: 500; }
+  .sep { color: rgba(0,0,0,0.2); margin: 0 6px; }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px; margin-bottom: 1.5rem;
+  }
+  .mc {
+    background: #fff; border-radius: 10px;
+    border: 1px solid rgba(0,0,0,0.07); padding: 1rem 1.25rem;
+  }
+  .ml { font-size: 11px; color: #888780; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .mv { font-size: 22px; font-weight: 600; line-height: 1; }
+  .ms { font-size: 11px; margin-top: 4px; }
+  .good { color: #1D9E75; } .bad { color: #E24B4A; } .warn { color: #BA7517; }
+
+  .g2 {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; margin-bottom: 16px;
+  }
+  .card {
+    background: #fff; border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.07); padding: 1.25rem;
+  }
+  .ct { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+  .cs { font-size: 11px; color: #888780; margin-bottom: 10px; }
+  .leg { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; font-size: 11px; color: #6b6a65; }
+  .li { display: flex; align-items: center; gap: 5px; }
+  .ld { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .cw { position: relative; }
+
+  .tcard {
+    background: #fff; border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.07); overflow: hidden;
+    margin-bottom: 1rem;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th {
+    padding: 10px 12px; text-align: left;
+    font-size: 10px; font-weight: 600; color: #888780;
+    border-bottom: 1px solid rgba(0,0,0,0.07);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    background: #faf9f7;
+  }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: #faf9f7; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+  .bg { background: #dbeafe; color: #1e40af; }
+  .bl { background: #ede9fe; color: #5b21b6; }
+  .br { background: #d1fae5; color: #065f46; }
+  .bb { background: #f3f4f6; color: #374151; }
+  .vg { color: #1D9E75; font-weight: 600; }
+  .vb { color: #E24B4A; font-weight: 600; }
+  .vm { color: #BA7517; font-weight: 600; }
+
+  #loading-msg {
+    text-align: center; padding: 4rem 2rem;
+    font-size: 14px; color: #888780;
+  }
+  #dashboard { display: none; }
+
+  footer {
+    text-align: center; padding: 1.5rem;
+    font-size: 11px; color: #aaa;
+  }
+
+  @media (max-width: 700px) {
+    .g2 { grid-template-columns: 1fr; }
+    .metrics { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>RAG Hallucination Study</h1>
+    <p>GPT-3.5 vs LLaMA-2 &mdash; SQuAD v2 &amp; TruthfulQA &mdash; Baseline vs RAG</p>
+  </div>
+  <span class="status-badge status-loading" id="status-badge">Loading...</span>
+</header>
+
+<main>
+  <div id="loading-msg">Loading results from <code>results/</code> folder...</div>
+
+  <div id="dashboard">
+
+    <div class="filters">
+      <span>Model:</span>
+      <button class="fb on" id="m-both" onclick="setF('model','both')">Both</button>
+      <button class="fb" id="m-gpt"  onclick="setF('model','gpt')">GPT-3.5</button>
+      <button class="fb" id="m-llm"  onclick="setF('model','llama')">LLaMA-2</button>
+      <span class="sep">|</span>
+      <span>Dataset:</span>
+      <button class="fb on" id="d-both" onclick="setF('ds','both')">Both</button>
+      <button class="fb" id="d-sq"   onclick="setF('ds','squad')">SQuAD v2</button>
+      <button class="fb" id="d-tqa"  onclick="setF('ds','tqa')">TruthfulQA</button>
+      <span class="sep">|</span>
+      <span>Mode:</span>
+      <button class="fb on" id="r-both" onclick="setF('rag','both')">Both</button>
+      <button class="fb" id="r-base" onclick="setF('rag','base')">Baseline only</button>
+      <button class="fb" id="r-rag"  onclick="setF('rag','rag')">RAG only</button>
+    </div>
+
+    <div class="metrics" id="mcards"></div>
+
+    <div class="g2">
+      <div class="card">
+        <div class="ct">Hallucination rate (%)</div>
+        <div class="cs">% of responses flagged as hallucinated (F1 &lt; 0.2)</div>
+        <div class="leg" id="lg1"></div>
+        <div class="cw" style="height:200px"><canvas id="c1" role="img" aria-label="Hallucination rate chart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ct">Average F1 score (%)</div>
+        <div class="cs">Token-level overlap between answer and reference</div>
+        <div class="leg" id="lg2"></div>
+        <div class="cw" style="height:200px"><canvas id="c2" role="img" aria-label="F1 score chart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="g2">
+      <div class="card">
+        <div class="ct">Exact match accuracy (%)</div>
+        <div class="cs">% of answers exactly matching the reference</div>
+        <div class="leg" id="lg3"></div>
+        <div class="cw" style="height:200px"><canvas id="c3" role="img" aria-label="Exact match chart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ct">Overconfident language (%)</div>
+        <div class="cs">% of answers using phrases like "definitely", "always"</div>
+        <div class="leg" id="lg4"></div>
+        <div class="cw" style="height:200px"><canvas id="c4" role="img" aria-label="Overconfident language chart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="tcard">
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th><th>Dataset</th><th>Mode</th><th>n</th>
+            <th>Exact match</th><th>Avg F1</th><th>Hallucination %</th><th>Overconfident %</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+  </div>
+</main>
+
+<footer id="footer">Bahniman Das &mdash; Georgia State University &mdash; Advisor: Dr. Kiril Kuzmin</footer>
+
+<script>
+const COLORS = {
+  'GPT-3.5-false': '#E24B4A',
+  'GPT-3.5-true' : '#1D9E75',
+  'LLaMA-2-false': '#7F77DD',
+  'LLaMA-2-true' : '#EF9F27',
+};
+
+let ALL_DATA = [];
+let fModel = 'both', fDs = 'both', fRag = 'both';
+const charts = {};
+
+async function loadResults() {
+  const files = [
+    { path: 'results/gpt35_results.json',  label: 'GPT-3.5'  },
+    { path: 'results/llama2_results.json', label: 'LLaMA-2'  },
+  ];
+
+  let loaded = 0;
+  const badge = document.getElementById('status-badge');
+
+  for (const f of files) {
+    try {
+      const resp = await fetch(f.path);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      for (const row of data.results) {
+        ALL_DATA.push({
+          model   : f.label,
+          dataset : row.dataset === 'squad_v2' ? 'SQuAD v2' : 'TruthfulQA',
+          rag     : row.rag,
+          n       : row.n,
+          em      : row.exact_match,
+          f1      : row.avg_f1,
+          hall    : row.hallucination_pct,
+          oc      : row.overconfident_pct,
+        });
+      }
+      loaded++;
+    } catch(e) {
+      console.warn(`Could not load ${f.path}:`, e.message);
+    }
+  }
+
+  if (loaded === 0) {
+    document.getElementById('loading-msg').innerHTML =
+      '<strong style="color:#E24B4A">No result files found.</strong><br><br>' +
+      'Make sure you are running a local server from your RAG_study folder:<br><br>' +
+      '<code>python -m http.server 8080</code><br><br>' +
+      'Then open <code>http://localhost:8080/dashboard.html</code><br><br>' +
+      'Also make sure <code>results/gpt35_results.json</code> and <code>results/llama2_results.json</code> exist.';
+    badge.textContent = 'No data';
+    badge.className = 'status-badge status-err';
+    return;
+  }
+
+  badge.textContent = loaded === 2 ? 'Both models loaded' : '1 model loaded';
+  badge.className = 'status-badge status-ok';
+  document.getElementById('loading-msg').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  render();
+}
+
+function filtered() {
+  return ALL_DATA.filter(d => {
+    const m  = fModel === 'both' || (fModel === 'gpt' && d.model === 'GPT-3.5') || (fModel === 'llama' && d.model === 'LLaMA-2');
+    const ds = fDs === 'both' || (fDs === 'squad' && d.dataset === 'SQuAD v2') || (fDs === 'tqa' && d.dataset === 'TruthfulQA');
+    const r  = fRag === 'both' || (fRag === 'base' && !d.rag) || (fRag === 'rag' && d.rag);
+    return m && ds && r;
+  });
+}
+
+function avg(rows, k) {
+  return rows.length ? rows.reduce((s, r) => s + r[k], 0) / rows.length : 0;
+}
+
+function renderMetrics() {
+  const rows = filtered();
+  const base = rows.filter(r => !r.rag);
+  const rag  = rows.filter(r => r.rag);
+  const bH = avg(base, 'hall'), rH = avg(rag, 'hall');
+  const bF = avg(base, 'f1'),   rF = avg(rag, 'f1');
+  const drop = bH > 0 ? ((bH - rH) / bH * 100).toFixed(0) : '—';
+  const gain = (rF - bF).toFixed(1);
+  const dropNum = parseFloat(drop);
+  const gainNum = parseFloat(gain);
+
+  document.getElementById('mcards').innerHTML = `
+    <div class="mc">
+      <div class="ml">Baseline hall. rate</div>
+      <div class="mv bad">${bH.toFixed(1)}%</div>
+      <div class="ms" style="color:#888780">avg across selection</div>
+    </div>
+    <div class="mc">
+      <div class="ml">RAG hall. rate</div>
+      <div class="mv ${rH < bH ? 'good' : 'bad'}">${rH.toFixed(1)}%</div>
+      <div class="ms ${dropNum > 0 ? 'good' : 'bad'}">${dropNum > 0 ? '↓' : '↑'} ${Math.abs(dropNum)}% ${dropNum > 0 ? 'reduction' : 'increase'}</div>
+    </div>
+    <div class="mc">
+      <div class="ml">Baseline avg F1</div>
+      <div class="mv">${bF.toFixed(1)}%</div>
+      <div class="ms" style="color:#888780">token overlap</div>
+    </div>
+    <div class="mc">
+      <div class="ml">RAG avg F1</div>
+      <div class="mv ${gainNum > 0 ? 'good' : 'bad'}">${rF.toFixed(1)}%</div>
+      <div class="ms ${gainNum > 0 ? 'good' : 'bad'}">${gainNum > 0 ? '↑ +' : '↓ '}${Math.abs(gainNum)} pts</div>
+    </div>
+  `;
+}
+
+function getLabelsAndDatasets(field, maxY) {
+  const rows = filtered();
+  const models = [...new Set(rows.map(r => r.model))];
+  const datasets_list = [...new Set(rows.map(r => r.dataset))];
+  const ragVals = [...new Set(rows.map(r => r.rag))].sort();
+  const labels = datasets_list;
+  const datasets = [];
+
+  for (const m of models) {
+    for (const isRag of ragVals) {
+      const key = `${m}-${isRag}`;
+      const c = COLORS[key] || '#888';
+      const data = labels.map(ds => {
+        const found = rows.find(r => r.model === m && r.dataset === ds && r.rag === isRag);
+        return found ? found[field] : null;
+      });
+      datasets.push({
+        label: `${m} ${isRag ? 'RAG' : 'Base'}`,
+        data,
+        backgroundColor: c + '33',
+        borderColor: c,
+        borderWidth: 2,
+        borderRadius: 4,
+        borderSkipped: false,
+      });
+    }
+  }
+  return { labels, datasets };
+}
+
+function makeLegend(elId) {
+  const rows = filtered();
+  const models = [...new Set(rows.map(r => r.model))];
+  const ragVals = [...new Set(rows.map(r => r.rag))].sort();
+  let html = '';
+  for (const m of models) {
+    for (const isRag of ragVals) {
+      const key = `${m}-${isRag}`;
+      const c = COLORS[key] || '#888';
+      html += `<span class="li"><span class="ld" style="background:${c}"></span>${m} ${isRag ? 'RAG' : 'Base'}</span>`;
+    }
+  }
+  document.getElementById(elId).innerHTML = html;
+}
+
+const chartOpts = (max) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: '#888780', font: { size: 10 } } },
+    y: {
+      beginAtZero: true, max,
+      grid: { color: 'rgba(0,0,0,0.05)' },
+      ticks: { callback: v => v + '%', color: '#888780', font: { size: 10 } }
+    }
+  }
+});
+
+function buildCharts() {
+  const configs = [
+    { id: 'c1', lg: 'lg1', field: 'hall', max: 110 },
+    { id: 'c2', lg: 'lg2', field: 'f1',   max: 60  },
+    { id: 'c3', lg: 'lg3', field: 'em',   max: 20  },
+    { id: 'c4', lg: 'lg4', field: 'oc',   max: 15  },
+  ];
+  configs.forEach(cfg => {
+    if (charts[cfg.id]) charts[cfg.id].destroy();
+    makeLegend(cfg.lg);
+    const { labels, datasets } = getLabelsAndDatasets(cfg.field, cfg.max);
+    charts[cfg.id] = new Chart(document.getElementById(cfg.id), {
+      type: 'bar',
+      data: { labels, datasets },
+      options: chartOpts(cfg.max),
+    });
+  });
+}
+
+function buildTable() {
+  const rows = filtered();
+  document.getElementById('tbody').innerHTML = rows.map(r => {
+    const mBadge = r.model === 'GPT-3.5' ? 'bg' : 'bl';
+    const rBadge = r.rag ? 'br' : 'bb';
+    const hCls = r.hall > 70 ? 'vb' : r.hall > 40 ? 'vm' : 'vg';
+    const fCls = r.f1  > 30  ? 'vg' : r.f1  > 15  ? 'vm' : 'vb';
+    const eCls = r.em  > 3   ? 'vg' : 'vm';
+    const oCls = r.oc  > 4   ? 'vb' : 'vg';
+    return `<tr>
+      <td><span class="badge ${mBadge}">${r.model}</span></td>
+      <td>${r.dataset}</td>
+      <td><span class="badge ${rBadge}">${r.rag ? 'RAG' : 'Baseline'}</span></td>
+      <td>${r.n}</td>
+      <td class="${eCls}">${r.em.toFixed(1)}%</td>
+      <td class="${fCls}">${r.f1.toFixed(1)}%</td>
+      <td class="${hCls}">${r.hall.toFixed(1)}%</td>
+      <td class="${oCls}">${r.oc.toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+}
+
+function render() {
+  renderMetrics();
+  buildCharts();
+  buildTable();
+}
+
+function setF(type, val) {
+  if (type === 'model') {
+    fModel = val;
+    ['both','gpt','llama'].forEach(k => document.getElementById(`m-${k}`).classList.remove('on'));
+    document.getElementById(`m-${val}`).classList.add('on');
+  } else if (type === 'ds') {
+    fDs = val;
+    ['both','sq','tqa'].forEach(k => document.getElementById(`d-${k}`).classList.remove('on'));
+    document.getElementById(`d-${val}`).classList.add('on');
+  } else if (type === 'rag') {
+    fRag = val;
+    ['both','base','rag'].forEach(k => document.getElementById(`r-${k}`).classList.remove('on'));
+    document.getElementById(`r-${val}`).classList.add('on');
+  }
+  render();
+}
+
+loadResults();
+</script>
+</body>
+</html>
