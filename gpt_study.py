@@ -1,15 +1,3 @@
-"""
-GPT-3.5 Hallucination Study — Baseline vs RAG
-===============================================
-Evaluates hallucination on SQuAD v2 and TruthfulQA
-using OpenAI GPT-3.5-turbo, with and without Wikipedia RAG.
-
-USAGE:
-    export OPENAI_API_KEY="sk-..."
-    python gpt_study.py
-    python gpt_study.py --n-squad 100 --n-truthful 100
-"""
-
 import os, re, json, argparse
 from pathlib import Path
 

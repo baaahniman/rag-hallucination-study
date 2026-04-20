@@ -1,12 +1,3 @@
-"""
-Compare GPT-3.5 vs LLaMA-2 Results
-=====================================
-Reads both result files and prints a side-by-side comparison.
-
-USAGE:
-    python compare_models.py
-"""
-
 import json
 from pathlib import Path
 

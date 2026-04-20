@@ -1,22 +1,3 @@
-"""
-LLaMA-2 Hallucination Study — Baseline vs RAG
-===============================================
-Evaluates hallucination on SQuAD v2 and TruthfulQA
-using Meta LLaMA-2-7b-chat-hf, with and without Wikipedia RAG.
-
-REQUIREMENTS:
-    - HuggingFace account with LLaMA-2 access approved
-    - export HF_TOKEN="hf_..."
-    - At least 8 GB RAM (runs in 4-bit quantized mode)
-    - GPU recommended but not required (CPU is slow)
-
-USAGE:
-    export HF_TOKEN="hf_..."
-    python llama_study.py
-    python llama_study.py --n-squad 100 --n-truthful 100
-    python llama_study.py --cpu          # force CPU mode
-"""
-
 import os, re, json, argparse
 from pathlib import Path
 
